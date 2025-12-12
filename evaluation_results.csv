@@ -1,0 +1,7 @@
+model,environment,episodes,average_reward
+models/best/best_model.zip,custom,3,788.9597071558237
+models_original/best/best_model.zip,original,3,442.3621260474126
+models/best/best_model.zip,custom,3,690.2891404579083
+models_original/best/best_model.zip,original,3,272.0967136050264
+models/best/best_model.zip,custom,3,791.9290345162153
+models/best/best_model.zip,custom,3,825.0561581005653
