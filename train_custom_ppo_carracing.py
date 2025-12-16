@@ -1,5 +1,6 @@
 import os
 
+import gymnasium as gym
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import EvalCallback, CheckpointCallback
 from stable_baselines3.common.monitor import Monitor
@@ -14,7 +15,11 @@ def make_env():
     Necessária para o DummyVecEnv.
     """
     def _init():
-        env = CustomCarRacingEnv(render_mode=None)
+        # 1. Cria o Gym normal
+        env = gym.make("CarRacing-v2", render_mode=None) # v2 é o padrão estável
+        # 2. Aplica o Wrapper Manualmente
+        env = CustomCarRacingEnv(env)
+        # 3. Monitor
         env = Monitor(env)
         return env
     return _init
