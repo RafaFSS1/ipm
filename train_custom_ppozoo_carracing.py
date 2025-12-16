@@ -34,7 +34,7 @@ def make_zoo_env(rank: int, seed: int = 0):
         
         # C. FrameSkip (Otimização)
         try:
-            env = FrameSkip(env, skip=2)
+            env = FrameSkip(env, skip=3)
         except:
             pass 
             
@@ -60,17 +60,17 @@ def main():
     os.makedirs(tb_log_dir, exist_ok=True)
 
     # --- 3. AMBIENTE DE TREINO (PARALELO) ---
-    num_cpu = 8 
+    num_cpu = 2 
     print(f"--- A iniciar {num_cpu} ambientes (Configuração Rápida 500k) ---")
     
     vec_env = SubprocVecEnv([make_zoo_env(i) for i in range(num_cpu)])
-    vec_env = VecFrameStack(vec_env, n_stack=2)
+    vec_env = VecFrameStack(vec_env, n_stack=4)
     # Clip reward a 10.0 ajuda a estabilizar treinos curtos
     vec_env = VecNormalize(vec_env, norm_obs=False, norm_reward=True, clip_reward=10.0)
 
     # --- 4. AMBIENTE DE AVALIAÇÃO ---
     eval_env = DummyVecEnv([make_zoo_env(999)])
-    eval_env = VecFrameStack(eval_env, n_stack=2)
+    eval_env = VecFrameStack(eval_env, n_stack=4)
     eval_env = VecNormalize(eval_env, norm_obs=False, norm_reward=False, clip_reward=10.0)
     eval_env.training = False 
     eval_env.norm_reward = False
@@ -110,17 +110,18 @@ def main():
         
         # AQUI ESTÁ A MUDANÇA PRINCIPAL:
         # Começamos com 3e-4 (mais rápido) em vez de 1e-4
-        learning_rate=linear_schedule(3e-4), 
+        #learning_rate=linear_schedule(3e-4),
+        learning_rate=3e-4,  
 
-        n_steps=512,
+        n_steps=2048,
         batch_size=128,
-        n_epochs=10,
+        n_epochs=20,
         gamma=0.99,
         gae_lambda=0.95,
         clip_range=0.2,
         max_grad_norm=0.5,
         vf_coef=0.5,
-        ent_coef=0.0, 
+        ent_coef=0.01,
         use_sde=True,
         sde_sample_freq=4,
         policy_kwargs=dict(

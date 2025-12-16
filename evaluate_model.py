@@ -44,7 +44,7 @@ def make_zoo_env(render_mode="human"):
         
         # 2. FrameSkip (igual ao treino Zoo)
         try:
-            env = FrameSkip(env, skip=2)
+            env = FrameSkip(env, skip=3)
         except:
             pass
             
