@@ -16,7 +16,7 @@ from custom_carracing_env import CustomCarRacingEnv
 # --- 1. FUNÇÃO DE SCHEDULE (Decaimento Linear) ---
 def linear_schedule(initial_value: float) -> Callable[[float], float]:
     """
-    Função que faz a learning rate descer linearmente de 'initial_value' até 0.
+    Learning Rate começa em 'initial_value' e desce até 0 no fim do treino.
     """
     def func(progress_remaining: float) -> float:
         return progress_remaining * initial_value
@@ -48,7 +48,6 @@ def make_zoo_env(rank: int, seed: int = 0):
 
 def main():
     # --- CONFIGURAÇÃO DE DIRETÓRIOS ---
-    # Usamos sufixo "_zoo" para separar do outro treino
     checkpoint_dir = "./checkpoints_zoo/"
     best_model_dir = "./models_zoo/best/"
     log_dir = "./logs_zoo/"
@@ -61,50 +60,48 @@ def main():
 
     # --- 3. AMBIENTE DE TREINO (PARALELO) ---
     num_cpu = 8 
-    print(f"--- A iniciar {num_cpu} ambientes de treino (Zoo Config) ---")
+    print(f"--- A iniciar {num_cpu} ambientes (Configuração Rápida 500k) ---")
     
-    # SubprocVecEnv para treino rápido
     vec_env = SubprocVecEnv([make_zoo_env(i) for i in range(num_cpu)])
     vec_env = VecFrameStack(vec_env, n_stack=2)
-    # Normalizamos rewards no treino para o PPO aprender melhor
+    # Clip reward a 10.0 ajuda a estabilizar treinos curtos
     vec_env = VecNormalize(vec_env, norm_obs=False, norm_reward=True, clip_reward=10.0)
 
-    # --- 4. AMBIENTE DE AVALIAÇÃO (EVAL) ---
-    print("--- A configurar ambiente de avaliação... ---")
-    # Usamos DummyVecEnv (apenas 1 env) para avaliação, para não gastar muito CPU
-    eval_env = DummyVecEnv([make_zoo_env(999)]) # Seed diferente
+    # --- 4. AMBIENTE DE AVALIAÇÃO ---
+    eval_env = DummyVecEnv([make_zoo_env(999)])
     eval_env = VecFrameStack(eval_env, n_stack=2)
-    
-    # NOTA IMPORTANTE: Não usamos VecNormalize no Eval Env!
-    # Porquê? Porque queremos que o 'best_model' seja decidido com base na 
-    # pontuação REAL (0-1000) e não na normalizada. Assim sabes se ele fez 900 pontos.
+    # Sem normalização no eval para vermos a pontuação real
 
-    # --- 5. CALLBACKS (CHECKPOINTS + BEST MODEL) ---
+    # --- 5. CALLBACKS (AJUSTADOS PARA 500K) ---
     
-    # Callback 1: Guardar o melhor modelo com base na performance real
+    # Avaliar a cada 25k steps (Total de 20 avaliações durante o treino)
     eval_callback = EvalCallback(
         eval_env,
         best_model_save_path=best_model_dir,
         log_path=log_dir,
-        eval_freq=50_000,        # Testar a cada 50k steps
-        n_eval_episodes=5,       # Fazer média de 5 corridas
-        deterministic=True,      # Usar modo determinístico (sem ruído)
+        eval_freq=25_000,        
+        n_eval_episodes=5,       
+        deterministic=True,      
         render=False
     )
 
-    # Callback 2: Guardar checkpoints periódicos (segurança)
+    # Guardar backup a cada 50k steps (Total de 10 backups)
     checkpoint_callback = CheckpointCallback(
-        save_freq=100_000,       # Guardar backup a cada 100k steps
+        save_freq=50_000,       
         save_path=checkpoint_dir,
         name_prefix="ppo_zoo_backup"
     )
 
-    # --- 6. MODELO PPO (HIPERPARÂMETROS TUNADOS) ---
+    # --- 6. MODELO PPO (AJUSTADO PARA VELOCIDADE) ---
     model = PPO(
         policy="CnnPolicy",
         env=vec_env,
         verbose=1,
-        learning_rate=linear_schedule(1e-4),
+        
+        # AQUI ESTÁ A MUDANÇA PRINCIPAL:
+        # Começamos com 3e-4 (mais rápido) em vez de 1e-4
+        learning_rate=linear_schedule(3e-4), 
+
         n_steps=512,
         batch_size=128,
         n_epochs=10,
@@ -126,13 +123,12 @@ def main():
     )
 
     # --- 7. TREINAR ---
-    print("--- A iniciar treino Zoo (com Saves)... ---")
-    TOTAL_TIMESTEPS = 2_000_000 
+    TOTAL_TIMESTEPS = 500_000 
+    print(f"--- A treinar por {TOTAL_TIMESTEPS} steps... ---")
 
     try:
         model.learn(
             total_timesteps=TOTAL_TIMESTEPS,
-            # Passamos a lista com os dois callbacks
             callback=[checkpoint_callback, eval_callback],
             progress_bar=True
         )
@@ -140,9 +136,9 @@ def main():
         print("\nTreino interrompido! A guardar modelo de segurança...")
 
     # --- 8. GUARDAR FINAL ---
-    model.save("ppo_carracing_zoo_final")
-    vec_env.save("vec_normalize_zoo.pkl") 
-    print("Treino concluído. Ficheiros guardados.")
+    model.save("ppo_carracing_zoo_500k")
+    vec_env.save("vec_normalize_zoo_500k.pkl") 
+    print("Treino curto concluído.")
 
 if __name__ == "__main__":
     main()
