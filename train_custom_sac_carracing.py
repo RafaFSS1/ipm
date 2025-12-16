@@ -26,10 +26,10 @@ def make_env():
 
 
 def main():
-    os.makedirs("./checkpoints/", exist_ok=True)
-    os.makedirs("./models/best/", exist_ok=True)
-    os.makedirs("./logs/", exist_ok=True)
-    os.makedirs("./tensorboard/", exist_ok=True)
+    os.makedirs("./checkpoints_sac/", exist_ok=True)
+    os.makedirs("./models_sac/best/", exist_ok=True)
+    os.makedirs("./logs_sac/", exist_ok=True)
+    os.makedirs("./tensorboard_sac/", exist_ok=True)
 
     # ---------- ENV DE TREINO ----------
     train_env = DummyVecEnv([make_env()])
@@ -42,7 +42,7 @@ def main():
     # ---------- CALLBACKS ----------
     checkpoint_callback = CheckpointCallback(
         save_freq=50_000,
-        save_path="./checkpoints/",
+        save_path="./checkpoints_sac/",
         name_prefix="sac_carracing",
         save_replay_buffer=True,       # SAC => faz sentido guardar replay buffer
         save_vecnormalize=False,
@@ -50,8 +50,8 @@ def main():
 
     eval_callback = EvalCallback(
         eval_env,
-        best_model_save_path="./models/best/",
-        log_path="./logs/",
+        best_model_save_path="./models_sac/best/",
+        log_path="./logs_sac/",
         eval_freq=10_000,
         deterministic=True,
         render=False
@@ -83,7 +83,7 @@ def main():
         use_sde=True,
         sde_sample_freq=4,
 
-        tensorboard_log="./tensorboard/"
+        tensorboard_log="./tensorboard_sac/"
     )
 
     # ---------- TREINO ----------
