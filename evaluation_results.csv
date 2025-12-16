@@ -34,3 +34,7 @@ models/best/best_after_change_rewards.zip,custom,1,895.2107033506036
 models_original/best/best_model.zip,original,1,869.4915063679218
 models_original/best/best_model.zip,custom,1,818.5552130416036
 models/best/best_after_change_rewards.zip,original,1,911.9999818056822
+checkpoints_zoo/ppo_zoo_backup_350000_steps.zip,zoo,1,207.14,0.0
+checkpoints_zoo/ppo_zoo_backup_350000_steps.zip,zoo,1,293.87,0.0
+checkpoints_zoo/ppo_zoo_backup_350000_steps.zip,zoo,1,27.71,0.0
+checkpoints_zoo/ppo_zoo_backup_350000_steps.zip,zoo,1,163.59,0.0

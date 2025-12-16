@@ -17,7 +17,7 @@ from custom_carracing_env import CustomCarRacingEnv
 def make_original_env(render_mode="human"):
     def _init():
         # Apenas o ambiente nativo. Sem wrappers de relva, sem resize.
-        env = gym.make("CarRacing-v2", render_mode=render_mode)
+        env = gym.make("CarRacing-v3", render_mode=render_mode)
         return env
     return _init
 
@@ -26,7 +26,7 @@ def make_original_env(render_mode="human"):
 # =========================================================
 def make_ppo_env(render_mode="human"):
     def _init():
-        env = gym.make("CarRacing-v2", render_mode=render_mode)
+        env = gym.make("CarRacing-v3", render_mode=render_mode)
         # Aplica APENAS a tua lógica de recompensas
         env = CustomCarRacingEnv(env) 
         return env
@@ -37,7 +37,7 @@ def make_ppo_env(render_mode="human"):
 # =========================================================
 def make_zoo_env(render_mode="human"):
     def _init():
-        env = gym.make("CarRacing-v2", render_mode=render_mode)
+        env = gym.make("CarRacing-v3", render_mode=render_mode)
         
         # 1. Penalidade na imagem original (96x96)
         env = CustomCarRacingEnv(env) 

@@ -16,7 +16,7 @@ def make_env():
     """
     def _init():
         # 1. Cria o Gym normal
-        env = gym.make("CarRacing-v2", render_mode=None) # v2 é o padrão estável
+        env = gym.make("CarRacing-v3", render_mode=None)
         # 2. Aplica o Wrapper Manualmente
         env = CustomCarRacingEnv(env)
         # 3. Monitor
