@@ -74,7 +74,7 @@ def evaluate(model_path, env_type, episodes=5, render_mode="human"):
     elif env_type == "zoo":
         # Zoo: 64x64. Usa FrameStack em vez de Transpose.
         env = DummyVecEnv([make_zoo_env(render_mode)])
-        env = VecFrameStack(env, n_stack=2)
+        env = VecFrameStack(env, n_stack=4)
 
     else:
         print("Erro: Tipo de ambiente desconhecido.")

@@ -37,9 +37,9 @@ def make_zoo_env(rank: int, seed: int = 0):
             env = FrameSkip(env, skip=3)
         except:
             pass 
-            
-        # D. Resize (Otimização) - 64x64 RGB
-        env = ResizeObservation(env, shape=(64, 64))
+
+        # D. Resize (Otimização) - 84x84 RGB
+        env = ResizeObservation(env, shape=(84, 84))
 
         # E. Monitor
         env = Monitor(env)
