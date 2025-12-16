@@ -44,12 +44,12 @@ def make_zoo_env(render_mode="human"):
         
         # 2. FrameSkip (igual ao treino Zoo)
         try:
-            env = FrameSkip(env, skip=3)
+            env = FrameSkip(env, skip=1)
         except:
             pass
             
-        # 3. Resize para 64x64 (igual ao treino Zoo)
-        env = ResizeObservation(env, shape=(64, 64))
+        # 3. Resize para 84x84 (igual ao treino Zoo)
+        env = ResizeObservation(env, shape=(84, 84))
         return env
     return _init
 

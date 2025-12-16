@@ -34,7 +34,7 @@ def make_zoo_env(rank: int, seed: int = 0):
         
         # C. FrameSkip (Otimização)
         try:
-            env = FrameSkip(env, skip=3)
+            env = FrameSkip(env, skip=1)
         except:
             pass 
 
