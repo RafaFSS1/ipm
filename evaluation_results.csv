@@ -1,4 +1,4 @@
-model,environment,episodes,average_reward
+model,environment,episodes,average_reward,std_dev
 models/best/best_model.zip,custom,3,-39.61000717679659
 checkpoints/ppo_carracing_250000_steps.zip,custom,3,330.21575288971263
 checkpoints/ppo_carracing_250000_steps.zip,custom,3,167.84511661032835
