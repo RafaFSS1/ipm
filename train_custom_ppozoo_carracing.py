@@ -8,7 +8,8 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import EvalCallback, CheckpointCallback
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import SubprocVecEnv, DummyVecEnv, VecFrameStack, VecNormalize
-from gymnasium.wrappers import ResizeObservation, FrameSkip
+from gymnasium.wrappers import ResizeObservation
+from utils import FrameSkip
 
 # IMPORTANTE: O teu ficheiro com a lógica partilhada
 from custom_carracing_env import CustomCarRacingEnv

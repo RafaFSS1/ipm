@@ -5,7 +5,8 @@ import gymnasium as gym
 import numpy as np
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv, VecTransposeImage, VecFrameStack
-from gymnasium.wrappers import ResizeObservation, FrameSkip
+from gymnasium.wrappers import ResizeObservation
+from utils import FrameSkip
 
 # Importar a tua lógica partilhada
 from custom_carracing_env import CustomCarRacingEnv
