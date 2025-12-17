@@ -71,7 +71,10 @@ class HardSafetyWrapper(gym.Wrapper):
         
         # Penalidade Relva
         roi = obs[60:65, 46:50]
-        diff = np.mean(roi[:, :, 1]) - np.mean(roi[:, :, 0])
+        red_channel_mean   = np.mean(roi[:, :, 0]) / 255.0
+        green_channel_mean = np.mean(roi[:, :, 1]) / 255.0
+        
+        diff = green_channel_mean - red_channel_mean
         if diff > 0.15:
             custom_reward -= 0.1 
             penalty = diff * 4.0 

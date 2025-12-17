@@ -46,3 +46,5 @@ models_zoo/best/best_model.zip,zoo,1,653.46,0.0
 models_zoo/best/best_model.zip,zoo,1,291.66,0.0
 models_zoo/best/best_model.zip,zoo,1,529.6,0.0
 models_zoo/best/best_model.zip,zoo,1,542.52,0.0
+models_original/best/best_model.zip,original,1,886.63,0.0
+models/best/best_after_change_rewards.zip,ppo,1,892.34,0.0
