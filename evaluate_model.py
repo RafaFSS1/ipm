@@ -66,7 +66,7 @@ def evaluate(model_path, env_type, episodes=5, render_mode="human"):
         env = DummyVecEnv([make_original_env(render_mode)])
         env = VecTransposeImage(env)
         
-    elif env_type == "ppo":
+    elif env_type == "custom":
         # PPO Custom: 96x96. Igual ao original, mas com as tuas penalidades ativas.
         env = DummyVecEnv([make_ppo_env(render_mode)])
         env = VecTransposeImage(env)
@@ -137,8 +137,8 @@ if __name__ == "__main__":
     
     # Agora aceita os 3 tipos:
     parser.add_argument("--env", type=str, required=True, 
-                        choices=["original", "ppo", "zoo"], 
-                        help="Escolhe: original, ppo (o teu simples) ou zoo (otimizado)")
+                        choices=["original", "custom", "zoo"], 
+                        help="Escolhe: original, custom (o teu simples) ou zoo (otimizado)")
     
     parser.add_argument("--episodes", type=int, default=3, help="Número de voltas")
     parser.add_argument("--no-render", action="store_true", help="Não abrir janela (rápido)")

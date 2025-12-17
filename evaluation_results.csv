@@ -48,3 +48,8 @@ models_zoo/best/best_model.zip,zoo,1,529.6,0.0
 models_zoo/best/best_model.zip,zoo,1,542.52,0.0
 models_original/best/best_model.zip,original,1,886.63,0.0
 models/best/best_after_change_rewards.zip,ppo,1,892.34,0.0
+models_zoo/best/best_model_beforerewardchange.zip,zoo,1,121.61,0.0
+models_zoo/best/best_model_beforerewardchange.zip,zoo,1,138.33,0.0
+models_zoo/best/best_model_beforerewardchange.zip,zoo,1,642.98,0.0
+models_zoo/best/best_model_beforerewardchange.zip,zoo,1,619.58,0.0
+models_zoo/best/best_model_beforerewardchange.zip,zoo,1,514.01,0.0
