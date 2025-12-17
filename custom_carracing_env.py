@@ -67,11 +67,11 @@ class CustomCarRacingEnv(gym.Wrapper):
             # Com multiplicador 4.0:
             # - Se diff for 0.25 (mínimo relva) -> Punição = -1.0
             # - Se diff for 0.50 (máximo relva) -> Punição = -2.0
-            #penalty = diff * 4.0  
+            penalty = diff * 4.0  
             self.grass_counter += 1 # Está na relva, aumenta o contador
             # Mantemos o clip em 2.0 por segurança, caso apareça um pico estranho
-            #penalty = min(penalty, 2.0)
-            penalty=0.1
+            penalty = min(penalty, 2.0)
+            #penalty=0.1
             
             custom_reward -= penalty
         else:

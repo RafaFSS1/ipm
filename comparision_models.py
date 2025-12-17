@@ -71,14 +71,17 @@ class HardSafetyWrapper(gym.Wrapper):
         
         # Penalidade Relva
         roi = obs[60:65, 46:50]
-        if np.mean(roi[:, :, 1]) > np.mean(roi[:, :, 0]) + 0.15:
+        diff = np.mean(roi[:, :, 1]) - np.mean(roi[:, :, 0])
+        if diff > 0.15:
             custom_reward -= 0.1 
+            penalty = diff * 4.0 
+            penalty = min(penalty, 2.0) 
             self.grass_counter += 1
         else:
             self.grass_counter = 0
         
         # Cerca Elétrica (Morte)
-        if self.grass_counter > 30:
+        if self.grass_counter > 50:
             terminated = True
             custom_reward -= 10.0
         
