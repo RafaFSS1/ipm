@@ -33,13 +33,13 @@ def make_zoo_env(rank: int, seed: int = 0):
         env = CustomCarRacingEnv(env)
         
         # C. FrameSkip (Otimização)
-        try:
-            env = FrameSkip(env, skip=1)
-        except:
-            pass 
+        #try:
+            #env = FrameSkip(env, skip=1)
+        #except:
+            #pass 
 
         # D. Resize (Otimização) - 84x84 RGB
-        env = ResizeObservation(env, shape=(84, 84))
+        #env = ResizeObservation(env, shape=(84, 84))
 
         # E. Monitor
         env = Monitor(env)
@@ -89,8 +89,7 @@ def main():
         eval_env,
         best_model_save_path=best_model_dir,
         log_path=log_dir,
-        eval_freq=eval_freq_real,        
-        n_eval_episodes=5,       
+        eval_freq=eval_freq_real,       
         deterministic=True,      
         render=False
     )
@@ -122,7 +121,6 @@ def main():
         max_grad_norm=0.5,
         vf_coef=0.5,
         ent_coef=0.01,
-        use_sde=True,
         sde_sample_freq=4,
         policy_kwargs=dict(
             log_std_init=-2,
