@@ -66,6 +66,7 @@ class HardSafetyWrapper(gym.Wrapper):
 
     def step(self, action):
         obs, reward, terminated, truncated, info = self.env.step(action)
+        steering, gas, brake = action
         custom_reward = reward
         
         # Penalidade Relva
@@ -79,7 +80,15 @@ class HardSafetyWrapper(gym.Wrapper):
         # Cerca Elétrica (Morte)
         if self.grass_counter > 30:
             terminated = True
-            custom_reward -= 5.0
+            custom_reward -= 10.0
+        
+        # Penalidade Travagem Excessiva
+        custom_reward -= 0.05 * brake
+
+        # Penalidade ZigZag
+        steering_diff = abs(steering - self.last_steering)
+        custom_reward -= 0.05 * steering_diff
+        self.last_steering = steering
             
         return obs, custom_reward, terminated, truncated, info
 
