@@ -53,3 +53,4 @@ models_zoo/best/best_model_beforerewardchange.zip,zoo,1,138.33,0.0
 models_zoo/best/best_model_beforerewardchange.zip,zoo,1,642.98,0.0
 models_zoo/best/best_model_beforerewardchange.zip,zoo,1,619.58,0.0
 models_zoo/best/best_model_beforerewardchange.zip,zoo,1,514.01,0.0
+SAC,models_sac/best/best_model.zip,custom,1,-96.65,0.0
