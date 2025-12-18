@@ -8,6 +8,6 @@ Para efetuar a visualização das simulações, utiliza-se o ficheiro `evaluate_
 
 `python evaluate_model.py --env zoo --model final_models/ppo_zoo_custom.zip --episodes 1`
 
-`python evaluate_model.py --env custom --model final_models/sac_custom.zip --episodes 1 --algo sac`
+`python evaluate_model.py --env custom --model final_models/sac_custom.zip --episodes 1`
 
 Cada comando permite visualizar o comportamento do respetivo agente no ambiente correspondente.
