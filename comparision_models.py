@@ -8,131 +8,133 @@ from stable_baselines3 import PPO, SAC
 from stable_baselines3.common.vec_env import DummyVecEnv, VecTransposeImage, VecFrameStack
 
 # ==============================================================================
-# 1. WRAPPERS (Lógica ESTRITA do teu ficheiro + Fix dos Zeros)
+# 1. WRAPPER UNIFICADO (O Juiz Duplo)
 # ==============================================================================
 
-class SoftMetricWrapper(gym.Wrapper):
-    """
-    MODO SOFT: Deixa o carro andar até ao fim.
-    Mede: Percentagem de Relva, ZigZag e Pontuação Pura.
-    """
+class DualAnalyticWrapper(gym.Wrapper):
     def __init__(self, env):
         super().__init__(env)
-        self.grass_steps = 0
-        self.total_steps = 0
-        self.total_zigzag = 0.0
-        self.last_steering = 0.0
-
-    def reset(self, **kwargs):
-        self.grass_steps = 0
-        self.total_steps = 0
-        self.total_zigzag = 0.0
-        self.last_steering = 0.0
-        return self.env.reset(**kwargs)
-
-    def step(self, action):
-        obs, reward, terminated, truncated, info = self.env.step(action)
-        self.total_steps += 1
-        
-        # Métrica ZigZag (Estabilidade)
-        self.total_zigzag += abs(action[0] - self.last_steering)
-        self.last_steering = action[0]
-
-        # Métrica Relva (Disciplina)
-        roi = obs[60:65, 46:50]
-        red_channel_mean   = np.mean(roi[:, :, 0]) / 255.0
-        green_channel_mean = np.mean(roi[:, :, 1]) / 255.0
-        
-        diff = green_channel_mean - red_channel_mean
-        if diff > 0.15:
-            self.grass_steps += 1
-        
-        # --- FIX: INJETAR NO INFO PARA NÃO DAR ZERO ---
-        # Guardamos as stats aqui porque no próximo frame o reset() limpa tudo
-        if terminated or truncated:
-            grass_pct = (self.grass_steps / self.total_steps * 100) if self.total_steps > 0 else 0
-            zigzag_idx = (self.total_zigzag / self.total_steps) if self.total_steps > 0 else 0
-            
-            info["episode_metrics"] = {
-                "Relva_Pct": grass_pct,
-                "ZigZag_Index": zigzag_idx
-            }
-
-        return obs, reward, terminated, truncated, info
-
-class HardSafetyWrapper(gym.Wrapper):
-    """
-    MODO HARD: Regras de Morte Ativas (Copiado do teu ficheiro).
-    """
-    def __init__(self, env):
-        super().__init__(env)
+        # Acumuladores
         self.grass_counter = 0
         self.last_steering = 0.0
+        
+        # Stats do Episódio
+        self.episode_original_reward = 0.0
+        self.episode_custom_reward = 0.0
+        self.episode_grass_steps = 0
+        self.episode_total_steps = 0
+        self.episode_zigzag = 0.0
+        
+        # Estado de "Morte Virtual"
+        self.simulated_death = False
 
     def reset(self, **kwargs):
         self.grass_counter = 0
         self.last_steering = 0.0
+        
+        self.episode_original_reward = 0.0
+        self.episode_custom_reward = 0.0
+        self.episode_grass_steps = 0
+        self.episode_total_steps = 0
+        self.episode_zigzag = 0.0
+        
+        self.simulated_death = False
+        
         return self.env.reset(**kwargs)
 
     def step(self, action):
-        obs, reward, terminated, truncated, info = self.env.step(action)
+        # 1. Passo Real (Ambiente Original - O carro nunca morre por regras custom)
+        obs, original_reward, terminated, truncated, info = self.env.step(action)
+        
         steering, gas, brake = action
-        custom_reward = reward
+        self.episode_total_steps += 1
+        self.episode_original_reward += original_reward
+
+        # --- CÁLCULO DE MÉTRICAS GERAIS ---
         
-        # Penalidade Relva (A tua lógica complexa)
+        # ZigZag
+        self.episode_zigzag += abs(steering - self.last_steering)
+        self.last_steering = steering
+
+        # Deteção de Relva (Canais normalizados 0-1)
         roi = obs[60:65, 46:50]
-        red_channel_mean   = np.mean(roi[:, :, 0]) / 255.0
-        green_channel_mean = np.mean(roi[:, :, 1]) / 255.0
+        red = np.mean(roi[:, :, 0]).astype(float) / 255.0
+        green = np.mean(roi[:, :, 1]).astype(float) / 255.0
+        diff = green - red
         
-        diff = green_channel_mean - red_channel_mean
-        if diff > 0.15:
-            penalty = diff * 4.0 
-            penalty = min(penalty, 2.0) 
+        is_grass = diff > 0.15
+        if is_grass:
+            self.episode_grass_steps += 1
             self.grass_counter += 1
-            custom_reward -= penalty
         else:
             self.grass_counter = 0
-        
-        # Cerca Elétrica (Morte aos 50 frames)
-        if self.grass_counter > 50:
-            terminated = True
-            custom_reward -= 10.0
-        
-        # Penalidade Travagem Excessiva
-        custom_reward -= 0.05 * brake
 
-        # Penalidade ZigZag
-        steering_diff = abs(steering - self.last_steering)
-        custom_reward -= 0.05 * steering_diff
-        self.last_steering = steering
+        # --- CÁLCULO DA REWARD CUSTOM (SIMULADA) ---
+        # Só calculamos se o carro ainda estiver "vivo" nas regras custom
+        if not self.simulated_death:
             
-        return obs, custom_reward, terminated, truncated, info
+            # Começamos com a reward base deste step
+            step_custom_reward = original_reward
+            
+            # 1. Penalidade Relva (Diff * 4)
+            if is_grass:
+                penalty = diff * 4.0
+                penalty = min(penalty, 2.0)
+                step_custom_reward -= penalty
+                # Nota: Não apliquei o -0.1 fixo extra porque no teu código anterior
+                # parecia que querias ou um ou outro. Se quiseres os dois, descomenta:
+                # step_custom_reward -= 0.1
+
+            # 2. Penalidade Travão
+            step_custom_reward -= 0.05 * brake
+            
+            # 3. Penalidade ZigZag
+            steering_diff = abs(steering - self.last_steering) # Já calculado mas ok
+            step_custom_reward -= 0.05 * steering_diff
+            
+            # 4. Verificar Morte Súbita (> 50 frames)
+            if self.grass_counter > 50:
+                self.simulated_death = True
+                step_custom_reward -= 10.0 # Penalidade final de morte
+                # A partir de agora, self.episode_custom_reward deixa de ser atualizado
+            
+            self.episode_custom_reward += step_custom_reward
+
+        # --- SALVAR NO INFO ---
+        if terminated or truncated:
+            grass_pct = (self.episode_grass_steps / self.episode_total_steps * 100) if self.episode_total_steps > 0 else 0
+            zigzag_idx = (self.episode_zigzag / self.episode_total_steps) if self.episode_total_steps > 0 else 0
+            
+            info["episode_metrics"] = {
+                "Original_Score": self.episode_original_reward,
+                "Custom_Score": self.episode_custom_reward, # Congelado na morte
+                "Relva_Pct": grass_pct,
+                "ZigZag_Index": zigzag_idx,
+                "Died_Virtual": 1 if self.simulated_death else 0, # Se morreu virtualmente
+                "Death_Step": self.episode_total_steps if self.simulated_death else -1 # Debug
+            }
+
+        return obs, original_reward, terminated, truncated, info
 
 # ==============================================================================
-# 2. MOTOR DE TESTE (Com correção de leitura de Info)
+# 2. MOTOR DE AVALIAÇÃO
 # ==============================================================================
 
-def make_soft_env():
+def make_eval_env():
+    # Usamos o ambiente original + O nosso Wrapper Duplo
     env = gym.make("CarRacing-v3", render_mode="rgb_array")
-    env = SoftMetricWrapper(env)
+    env = DualAnalyticWrapper(env)
     return env
 
-def make_hard_env():
-    env = gym.make("CarRacing-v3", render_mode="rgb_array")
-    env = HardSafetyWrapper(env)
-    return env
-
-def run_test_battery(model, name, mode="soft", n_episodes=5):
-    print(f"   -> A correr modo {mode.upper()} ({n_episodes} voltas)...")
+def evaluate_model(model, name, n_episodes=10):
+    print(f"\n>> Avaliando: {name} ({n_episodes} episódios)...")
     
-    if mode == "soft":
-        env = DummyVecEnv([make_soft_env])
-    else:
-        env = DummyVecEnv([make_hard_env])
+    env = DummyVecEnv([make_eval_env])
 
+    # Lógica Stack para o Zoo
     if "Zoo" in name:
         env = VecFrameStack(env, n_stack=4)
-        print("      (FrameStack=4 Aplicado)")
+        print("   [Info] FrameStack=4 Ativo")
     
     env = VecTransposeImage(env)
     
@@ -141,136 +143,134 @@ def run_test_battery(model, name, mode="soft", n_episodes=5):
     for i in range(n_episodes):
         obs = env.reset()
         done = False
-        ep_reward = 0
-        captured_metrics = None # Variável para guardar o info
+        
+        # Variável para capturar as métricas do wrapper
+        metrics = None
         
         while not done:
             action, _ = model.predict(obs, deterministic=True)
             obs, reward, done, infos = env.step(action)
-            ep_reward += reward[0]
             
-            # Capturar métricas do wrapper antes que desapareçam
             if done and "episode_metrics" in infos[0]:
-                captured_metrics = infos[0]["episode_metrics"]
+                metrics = infos[0]["episode_metrics"]
         
-        if mode == "soft":
-            # Usar métricas capturadas (ou 0 se algo falhar)
-            r_pct = captured_metrics["Relva_Pct"] if captured_metrics else 0
-            z_idx = captured_metrics["ZigZag_Index"] if captured_metrics else 0
-            
-            results.append({
-                "Soft_Reward": ep_reward,
-                "Relva_Pct": r_pct,
-                "ZigZag": z_idx
-            })
-            print(f"      Volta {i+1}: Reward={ep_reward:.0f} | Relva={r_pct:.1f}%")
-        else:
-            survived = 1 if ep_reward > 600 else 0
-            results.append({
-                "Hard_Reward": ep_reward,
-                "Sobreviveu": survived
-            })
-            
+        # Se por acaso falhar (segurança), mete zeros
+        if metrics is None: metrics = {}
+        
+        data_point = {
+            "Modelo": name,
+            "Reward Original": metrics.get("Original_Score", 0),
+            "Reward Custom": metrics.get("Custom_Score", 0),
+            "Relva %": metrics.get("Relva_Pct", 0),
+            "ZigZag": metrics.get("ZigZag_Index", 0),
+            "Morreu (Simulado)": metrics.get("Died_Virtual", 0)
+        }
+        results.append(data_point)
+        
+        # Print bonito
+        status = "MORREU" if data_point["Morreu (Simulado)"] else "VIVO"
+        print(f"   Volta {i+1}: Orig={data_point['Reward Original']:.0f} | Custom={data_point['Reward Custom']:.0f} | {status}")
+
     env.close()
-    
-    df_temp = pd.DataFrame(results)
-    stats_out = df_temp.mean().to_dict()
-    
-    # Calcular Desvio Padrão
-    for key in ["Soft_Reward", "Hard_Reward", "ZigZag"]:
-        if key in df_temp.columns:
-            stats_out[f"{key}_Std"] = df_temp[key].std()
-            
-    return stats_out
+    return results
 
 # ==============================================================================
-# 3. MAIN (Com novos gráficos)
+# 3. MAIN
 # ==============================================================================
 def main():
+    # CAMINHOS - AJUSTA AQUI
     models_config = {
-        "PPO_Original_Gym": "final_models/ppo_original.zip", 
-        "PPO_Custom_Gym":   "final_models/ppo_custom.zip", 
-        "PPO_Zoo_Custom":   "final_models/ppo_zoo_custom.zip", 
-        "SAC_Custom":       "final_models/sac_custom.zip" 
+        "PPO_Original": "final_models/ppo_original.zip", 
+        "PPO_Custom":   "final_models/ppo_custom.zip", 
+        "PPO_Zoo":      "final_models/ppo_zoo_custom.zip", 
+        "SAC_Custom":   "final_models/sac_custom.zip" 
     }
 
-    N_EPISODES = 5
-    final_report = []
+    N_EPISODES = 10 # Pediste 10 voltas
+    all_data = []
 
-    print(f"--- BENCHMARK QUARTETO (Strict User Rewards) ---")
+    print(f"--- BENCHMARK UNIFICADO ({N_EPISODES} Voltas) ---")
 
     for name, path in models_config.items():
         if not os.path.exists(path):
-            print(f"\n[ERRO] Ficheiro não encontrado: {path}")
+            print(f"Saltar {name} (Não encontrado)")
             continue
             
-        print(f"\n>> Carregando: {name}")
         try:
             if "SAC" in name.upper():
                 model = SAC.load(path, device="cpu")
             else:
                 model = PPO.load(path, device="cpu")
-            
-            soft_stats = run_test_battery(model, name, mode="soft", n_episodes=N_EPISODES)
-            hard_stats = run_test_battery(model, name, mode="hard", n_episodes=N_EPISODES)
-            
-            combined = {"Modelo": name}
-            combined.update(soft_stats)
-            combined.update(hard_stats)
-            final_report.append(combined)
-            
+                
+            data = evaluate_model(model, name, n_episodes=N_EPISODES)
+            all_data.extend(data)
         except Exception as e:
-            print(f"   [CRASH] Erro ao testar {name}: {e}")
+            print(f"Erro {name}: {e}")
 
-    if not final_report: return
+    if not all_data: return
 
-    df = pd.DataFrame(final_report)
-    df["Sobreviveu"] = df["Sobreviveu"] * 100
-    df = df.round(2)
+    # --- PROCESSAMENTO DE DADOS ---
+    df = pd.DataFrame(all_data)
     
-    cols = ["Modelo", "Soft_Reward", "Soft_Reward_Std", "Hard_Reward", "Hard_Reward_Std", "Relva_Pct", "ZigZag", "Sobreviveu"]
-    cols = [c for c in cols if c in df.columns]
-    df = df[cols]
+    # Calcular Sobrevivência Real (%)
+    # Se Morreu (Simulado) for 0, então sobreviveu.
+    # Invertemos a lógica para calcular % de Sobrevivência
+    df["Sobreviveu"] = 1 - df["Morreu (Simulado)"]
+    
+    # Agrupar médias e desvios
+    summary = df.groupby("Modelo").agg({
+        "Reward Original": ["mean", "std"],
+        "Reward Custom": ["mean", "std"],
+        "Relva %": "mean",
+        "ZigZag": "mean",
+        "Sobreviveu": "mean" # Média de 0s e 1s dá a percentagem (ex: 0.8 = 80%)
+    }).round(2)
+    
+    # Ajustar nome das colunas e converter %
+    summary.columns = ['_'.join(col).strip() for col in summary.columns.values]
+    summary.rename(columns={"Sobreviveu_mean": "Taxa_Sobrevivência"}, inplace=True)
+    summary["Taxa_Sobrevivência"] *= 100
 
     print("\n" + "="*100)
-    print(" RESULTADOS FINAIS ")
+    print(" TABELA FINAL (10 Episódios no Mesmo Ambiente) ")
     print("="*100)
-    print(df.to_string(index=False))
+    print(summary.to_string())
     
-    df.to_csv("benchmark_quartet_strict.csv", index=False)
+    df.to_csv("benchmark_unified_raw.csv", index=False)
+    summary.to_csv("benchmark_unified_summary.csv")
+
+    # --- GRÁFICOS ---
+    fig, axes = plt.subplots(2, 3, figsize=(18, 10))
     
-    # --- GRÁFICOS (Layout 2x3 para incluir Hard Reward) ---
-    fig, axes = plt.subplots(2, 3, figsize=(20, 10))
-    
-    # 1. Soft Reward
-    sns.barplot(data=df, x="Modelo", y="Soft_Reward", ax=axes[0,0], hue="Modelo", legend=False, palette="viridis")
-    axes[0,0].errorbar(x=range(len(df)), y=df["Soft_Reward"], yerr=df.get("Soft_Reward_Std", 0), fmt='none', c='black', capsize=5)
-    axes[0,0].set_title("Soft Reward (Pontos Originais)")
-    axes[0,0].axhline(900, color='r', linestyle='--')
+    # 1. Comparação Direta de Rewards (Original vs Custom)
+    # Vamos criar um DF longo para poder usar o 'hue'
+    df_melt = df.melt(id_vars="Modelo", value_vars=["Reward Original", "Reward Custom"], var_name="Tipo", value_name="Pontos")
+    sns.barplot(data=df_melt, x="Modelo", y="Pontos", hue="Tipo", ax=axes[0,0], palette="muted")
+    axes[0,0].set_title("Original vs Custom Reward (Mesma Volta)")
+    axes[0,0].axhline(900, color='r', linestyle='--', alpha=0.5)
 
-    # 2. Hard Reward (ADICIONADO)
-    sns.barplot(data=df, x="Modelo", y="Hard_Reward", ax=axes[0,1], hue="Modelo", legend=False, palette="magma")
-    axes[0,1].errorbar(x=range(len(df)), y=df["Hard_Reward"], yerr=df.get("Hard_Reward_Std", 0), fmt='none', c='black', capsize=5)
-    axes[0,1].set_title("Hard Reward (As tuas Penalidades)")
+    # 2. Taxa de Sobrevivência
+    # Precisamos de calcular a % para o gráfico
+    surv_plot = df.groupby("Modelo")["Sobreviveu"].mean().reset_index()
+    surv_plot["Sobreviveu"] *= 100
+    sns.barplot(data=surv_plot, x="Modelo", y="Sobreviveu", ax=axes[0,1], palette="RdYlGn")
+    axes[0,1].set_title("Taxa de Sobrevivência Virtual (%)")
+    axes[0,1].set_ylim(0, 100)
 
-    # 3. Sobrevivência
-    sns.barplot(data=df, x="Modelo", y="Sobreviveu", ax=axes[0,2], hue="Modelo", legend=False, palette="RdYlGn")
-    axes[0,2].set_title("Sobrevivência (%)")
-    axes[0,2].set_ylim(0, 100)
+    # 3. Relva %
+    sns.barplot(data=df, x="Modelo", y="Relva %", ax=axes[1,0], palette="Reds")
+    axes[1,0].set_title("Uso de Relva (%)")
 
-    # 4. Relva
-    sns.barplot(data=df, x="Modelo", y="Relva_Pct", ax=axes[1,0], hue="Modelo", legend=False, palette="Reds")
-    axes[1,0].set_title("Relva %")
+    # 4. ZigZag
+    sns.barplot(data=df, x="Modelo", y="ZigZag", ax=axes[1,1], palette="Blues")
+    axes[1,1].set_title("Estabilidade (ZigZag)")
 
-    # 5. ZigZag
-    sns.barplot(data=df, x="Modelo", y="ZigZag", ax=axes[1,1], hue="Modelo", legend=False, palette="Blues")
-    axes[1,1].set_title("ZigZag Index")
-
-    # Apagar plot vazio
+    # Limpar gráficos extra
+    fig.delaxes(axes[0,2])
     fig.delaxes(axes[1,2])
-    
+
     plt.tight_layout()
-    plt.savefig("benchmark_quartet_charts.png")
+    plt.savefig("benchmark_unified_charts.png")
     plt.show()
 
 if __name__ == "__main__":
