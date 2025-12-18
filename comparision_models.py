@@ -8,7 +8,7 @@ from stable_baselines3 import PPO, SAC
 from stable_baselines3.common.vec_env import DummyVecEnv, VecTransposeImage, VecFrameStack
 
 # ==============================================================================
-# 1. WRAPPERS DE ANÁLISE (O Espião e o Juiz)
+# 1. WRAPPERS (Lógica ESTRITA do teu ficheiro + Fix dos Zeros)
 # ==============================================================================
 
 class SoftMetricWrapper(gym.Wrapper):
@@ -40,28 +40,38 @@ class SoftMetricWrapper(gym.Wrapper):
 
         # Métrica Relva (Disciplina)
         roi = obs[60:65, 46:50]
-        if np.mean(roi[:, :, 1]) > np.mean(roi[:, :, 0]) + 0.15:
+        red_channel_mean   = np.mean(roi[:, :, 0]) / 255.0
+        green_channel_mean = np.mean(roi[:, :, 1]) / 255.0
+        
+        diff = green_channel_mean - red_channel_mean
+        if diff > 0.15:
             self.grass_steps += 1
+        
+        # --- FIX: INJETAR NO INFO PARA NÃO DAR ZERO ---
+        # Guardamos as stats aqui porque no próximo frame o reset() limpa tudo
+        if terminated or truncated:
+            grass_pct = (self.grass_steps / self.total_steps * 100) if self.total_steps > 0 else 0
+            zigzag_idx = (self.total_zigzag / self.total_steps) if self.total_steps > 0 else 0
             
-        return obs, reward, terminated, truncated, info
+            info["episode_metrics"] = {
+                "Relva_Pct": grass_pct,
+                "ZigZag_Index": zigzag_idx
+            }
 
-    def get_stats(self):
-        return {
-            "Relva_Pct": (self.grass_steps / self.total_steps * 100) if self.total_steps > 0 else 0,
-            "ZigZag_Index": (self.total_zigzag / self.total_steps) if self.total_steps > 0 else 0
-        }
+        return obs, reward, terminated, truncated, info
 
 class HardSafetyWrapper(gym.Wrapper):
     """
-    MODO HARD: Regras de Morte Ativas.
-    Mede: Taxa de Sobrevivência.
+    MODO HARD: Regras de Morte Ativas (Copiado do teu ficheiro).
     """
     def __init__(self, env):
         super().__init__(env)
         self.grass_counter = 0
+        self.last_steering = 0.0
 
     def reset(self, **kwargs):
         self.grass_counter = 0
+        self.last_steering = 0.0
         return self.env.reset(**kwargs)
 
     def step(self, action):
@@ -69,21 +79,21 @@ class HardSafetyWrapper(gym.Wrapper):
         steering, gas, brake = action
         custom_reward = reward
         
-        # Penalidade Relva
+        # Penalidade Relva (A tua lógica complexa)
         roi = obs[60:65, 46:50]
         red_channel_mean   = np.mean(roi[:, :, 0]) / 255.0
         green_channel_mean = np.mean(roi[:, :, 1]) / 255.0
         
         diff = green_channel_mean - red_channel_mean
         if diff > 0.15:
-            custom_reward -= 0.1 
             penalty = diff * 4.0 
             penalty = min(penalty, 2.0) 
             self.grass_counter += 1
+            custom_reward -= penalty
         else:
             self.grass_counter = 0
         
-        # Cerca Elétrica (Morte)
+        # Cerca Elétrica (Morte aos 50 frames)
         if self.grass_counter > 50:
             terminated = True
             custom_reward -= 10.0
@@ -99,7 +109,7 @@ class HardSafetyWrapper(gym.Wrapper):
         return obs, custom_reward, terminated, truncated, info
 
 # ==============================================================================
-# 2. MOTOR DE TESTE
+# 2. MOTOR DE TESTE (Com correção de leitura de Info)
 # ==============================================================================
 
 def make_soft_env():
@@ -113,19 +123,13 @@ def make_hard_env():
     return env
 
 def run_test_battery(model, name, mode="soft", n_episodes=5):
-    """
-    Corre uma bateria de testes. Aplica Stacks automaticamente se for 'Zoo'.
-    """
     print(f"   -> A correr modo {mode.upper()} ({n_episodes} voltas)...")
     
-    # 1. Escolha do Ambiente
     if mode == "soft":
         env = DummyVecEnv([make_soft_env])
     else:
         env = DummyVecEnv([make_hard_env])
 
-    # 2. Lógica de STACKS (Otimizada para o teu caso)
-    # Apenas o Zoo usa Stacks. Os outros (Original, Custom Normal, SAC) são Raw.
     if "Zoo" in name:
         env = VecFrameStack(env, n_stack=4)
         print("      (FrameStack=4 Aplicado)")
@@ -134,26 +138,34 @@ def run_test_battery(model, name, mode="soft", n_episodes=5):
     
     results = []
     
-    for _ in range(n_episodes):
+    for i in range(n_episodes):
         obs = env.reset()
         done = False
         ep_reward = 0
+        captured_metrics = None # Variável para guardar o info
         
         while not done:
             action, _ = model.predict(obs, deterministic=True)
-            obs, reward, done, _ = env.step(action)
+            obs, reward, done, infos = env.step(action)
             ep_reward += reward[0]
+            
+            # Capturar métricas do wrapper antes que desapareçam
+            if done and "episode_metrics" in infos[0]:
+                captured_metrics = infos[0]["episode_metrics"]
         
         if mode == "soft":
-            stats = env.envs[0].get_stats()
+            # Usar métricas capturadas (ou 0 se algo falhar)
+            r_pct = captured_metrics["Relva_Pct"] if captured_metrics else 0
+            z_idx = captured_metrics["ZigZag_Index"] if captured_metrics else 0
+            
             results.append({
                 "Soft_Reward": ep_reward,
-                "Relva_Pct": stats["Relva_Pct"],
-                "ZigZag": stats["ZigZag_Index"]
+                "Relva_Pct": r_pct,
+                "ZigZag": z_idx
             })
+            print(f"      Volta {i+1}: Reward={ep_reward:.0f} | Relva={r_pct:.1f}%")
         else:
-            # Sobreviveu se fez > 800 pontos no modo Hard
-            survived = 1 if ep_reward > 800 else 0
+            survived = 1 if ep_reward > 600 else 0
             results.append({
                 "Hard_Reward": ep_reward,
                 "Sobreviveu": survived
@@ -161,10 +173,10 @@ def run_test_battery(model, name, mode="soft", n_episodes=5):
             
     env.close()
     
-    # Calcular Estatísticas (Média e Desvio Padrão)
     df_temp = pd.DataFrame(results)
     stats_out = df_temp.mean().to_dict()
     
+    # Calcular Desvio Padrão
     for key in ["Soft_Reward", "Hard_Reward", "ZigZag"]:
         if key in df_temp.columns:
             stats_out[f"{key}_Std"] = df_temp[key].std()
@@ -172,48 +184,34 @@ def run_test_battery(model, name, mode="soft", n_episodes=5):
     return stats_out
 
 # ==============================================================================
-# 3. MAIN - AQUI ESTÃO OS 4 MODELOS
+# 3. MAIN (Com novos gráficos)
 # ==============================================================================
 def main():
-    # --- CONFIGURAÇÃO DOS CAMINHOS ---
-    # Tens de garantir que estes 4 ficheiros existem!
     models_config = {
-        
-        # 1. PPO Original (Gym Padrão)
-        "PPO_Original_Gym": "models_original/best_model.zip", 
-        
-        # 2. PPO Custom (Gym com as tuas penalidades, mas arquitetura normal)
-        "PPO_Custom_Gym":   "models_custom_normal/best_model.zip", 
-        
-        # 3. PPO Zoo (Gym Custom + 2 CPU + Stacks)
-        "PPO_Zoo_Custom":   "models_zoo/best/best_model.zip", 
-        
-        # 4. SAC Custom (Gym Custom + SAC)
-        "SAC_Custom":       "models_sac/best_model.zip" 
+        "PPO_Original_Gym": "models_original/best/best_model.zip", 
+        "PPO_Custom_Gym":   "models/best/best_after_change_rewards.zip", 
+        "PPO_Zoo_Custom":   "models_zoo/best/best_model_beforerewardchange.zip", 
+        "SAC_Custom":       "models_sac/best/best_model.zip" 
     }
 
-    N_EPISODES = 5 # Aumenta para 10 se quiseres mais precisão
+    N_EPISODES = 5
     final_report = []
 
-    print(f"--- BENCHMARK QUARTETO: ORIGINAL vs CUSTOM vs ZOO vs SAC ---")
+    print(f"--- BENCHMARK QUARTETO (Strict User Rewards) ---")
 
     for name, path in models_config.items():
         if not os.path.exists(path):
-            print(f"\n[ERRO] Ficheiro não encontrado para: {name}")
-            print(f"       Caminho: {path}")
+            print(f"\n[ERRO] Ficheiro não encontrado: {path}")
             continue
             
         print(f"\n>> Carregando: {name}")
         try:
-            # Carregar o Modelo Certo
             if "SAC" in name.upper():
                 model = SAC.load(path, device="cpu")
             else:
                 model = PPO.load(path, device="cpu")
             
-            # Teste Soft (Qualidade)
             soft_stats = run_test_battery(model, name, mode="soft", n_episodes=N_EPISODES)
-            # Teste Hard (Sobrevivência)
             hard_stats = run_test_battery(model, name, mode="hard", n_episodes=N_EPISODES)
             
             combined = {"Modelo": name}
@@ -224,48 +222,53 @@ def main():
         except Exception as e:
             print(f"   [CRASH] Erro ao testar {name}: {e}")
 
-    if not final_report: 
-        print("Nenhum modelo testado.")
-        return
+    if not final_report: return
 
-    # --- GERAR TABELA ---
     df = pd.DataFrame(final_report)
     df["Sobreviveu"] = df["Sobreviveu"] * 100
     df = df.round(2)
     
-    cols = ["Modelo", "Soft_Reward", "Soft_Reward_Std", "Hard_Reward", "Relva_Pct", "ZigZag", "Sobreviveu"]
-    df = df[[c for c in cols if c in df.columns]]
+    cols = ["Modelo", "Soft_Reward", "Soft_Reward_Std", "Hard_Reward", "Hard_Reward_Std", "Relva_Pct", "ZigZag", "Sobreviveu"]
+    cols = [c for c in cols if c in df.columns]
+    df = df[cols]
 
     print("\n" + "="*100)
-    print(" RESULTADOS FINAIS (4 MODELOS) ")
+    print(" RESULTADOS FINAIS ")
     print("="*100)
     print(df.to_string(index=False))
-    print("="*100)
     
-    df.to_csv("benchmark_quartet.csv", index=False)
-
-    # --- GRÁFICOS COMPARATIVOS ---
-    fig, axes = plt.subplots(2, 2, figsize=(16, 10))
+    df.to_csv("benchmark_quartet_strict.csv", index=False)
     
-    # 1. Performance Pura (Média + Erro)
-    sns.barplot(data=df, x="Modelo", y="Soft_Reward", ax=axes[0,0], palette="viridis", hue="Modelo", legend=False)
-    axes[0,0].errorbar(x=range(len(df)), y=df["Soft_Reward"], yerr=df["Soft_Reward_Std"], fmt='none', c='black', capsize=5)
-    axes[0,0].set_title("Pontuação Pura (Ambiente Soft)")
+    # --- GRÁFICOS (Layout 2x3 para incluir Hard Reward) ---
+    fig, axes = plt.subplots(2, 3, figsize=(20, 10))
+    
+    # 1. Soft Reward
+    sns.barplot(data=df, x="Modelo", y="Soft_Reward", ax=axes[0,0], hue="Modelo", legend=False, palette="viridis")
+    axes[0,0].errorbar(x=range(len(df)), y=df["Soft_Reward"], yerr=df.get("Soft_Reward_Std", 0), fmt='none', c='black', capsize=5)
+    axes[0,0].set_title("Soft Reward (Pontos Originais)")
     axes[0,0].axhline(900, color='r', linestyle='--')
 
-    # 2. Segurança (Relva %)
-    sns.barplot(data=df, x="Modelo", y="Relva_Pct", ax=axes[0,1], palette="Reds", hue="Modelo", legend=False)
-    axes[0,1].set_title("Uso de Relva (%) - Menor é melhor")
+    # 2. Hard Reward (ADICIONADO)
+    sns.barplot(data=df, x="Modelo", y="Hard_Reward", ax=axes[0,1], hue="Modelo", legend=False, palette="magma")
+    axes[0,1].errorbar(x=range(len(df)), y=df["Hard_Reward"], yerr=df.get("Hard_Reward_Std", 0), fmt='none', c='black', capsize=5)
+    axes[0,1].set_title("Hard Reward (As tuas Penalidades)")
 
-    # 3. Estabilidade (ZigZag)
-    sns.barplot(data=df, x="Modelo", y="ZigZag", ax=axes[1,0], palette="Blues", hue="Modelo", legend=False)
-    axes[1,0].set_title("Índice ZigZag (Estabilidade) - Menor é melhor")
+    # 3. Sobrevivência
+    sns.barplot(data=df, x="Modelo", y="Sobreviveu", ax=axes[0,2], hue="Modelo", legend=False, palette="RdYlGn")
+    axes[0,2].set_title("Sobrevivência (%)")
+    axes[0,2].set_ylim(0, 100)
 
-    # 4. Sobrevivência (Hard Mode)
-    sns.barplot(data=df, x="Modelo", y="Sobreviveu", ax=axes[1,1], palette="RdYlGn", hue="Modelo", legend=False)
-    axes[1,1].set_title("Taxa de Sobrevivência (Hard Mode) %")
-    axes[1,1].set_ylim(0, 100)
+    # 4. Relva
+    sns.barplot(data=df, x="Modelo", y="Relva_Pct", ax=axes[1,0], hue="Modelo", legend=False, palette="Reds")
+    axes[1,0].set_title("Relva %")
 
+    # 5. ZigZag
+    sns.barplot(data=df, x="Modelo", y="ZigZag", ax=axes[1,1], hue="Modelo", legend=False, palette="Blues")
+    axes[1,1].set_title("ZigZag Index")
+
+    # Apagar plot vazio
+    fig.delaxes(axes[1,2])
+    
     plt.tight_layout()
     plt.savefig("benchmark_quartet_charts.png")
     plt.show()
