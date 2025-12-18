@@ -1,0 +1,5 @@
+Modelo,Reward Original_mean,Reward Original_std,Reward Custom_mean,Reward Custom_std,Relva %_mean,ZigZag_mean,Taxa_Sobrevivência
+PPO_Custom,903.03,19.97,895.37,28.81,0.65,0.43,100.0
+PPO_Original,888.77,23.75,866.64,46.96,2.81,0.32,90.0
+PPO_Zoo,530.63,105.7,473.85,141.08,8.25,0.02,60.0
+SAC_Custom,-28.71,5.96,-97.48,6.58,32.49,0.0,0.0
