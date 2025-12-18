@@ -1,0 +1,5 @@
+Modelo,Soft_Reward,Soft_Reward_Std,Hard_Reward,Hard_Reward_Std,Relva_Pct,ZigZag,Sobreviveu
+PPO_Original_Gym,823.04,180.64,584.98,356.54,7.63,0.32,60.0
+PPO_Custom_Gym,910.51,11.61,613.66,372.38,0.34,0.43,60.0
+PPO_Zoo_Custom,577.83,95.97,449.3,158.22,2.82,0.02,20.0
+SAC_Custom,-25.45,12.26,-99.02,5.31,27.0,0.0,0.0
