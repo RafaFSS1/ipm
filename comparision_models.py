@@ -188,10 +188,10 @@ def run_test_battery(model, name, mode="soft", n_episodes=5):
 # ==============================================================================
 def main():
     models_config = {
-        "PPO_Original_Gym": "models_original/best/best_model.zip", 
-        "PPO_Custom_Gym":   "models/best/best_after_change_rewards.zip", 
-        "PPO_Zoo_Custom":   "models_zoo/best/best_model_beforerewardchange.zip", 
-        "SAC_Custom":       "models_sac/best/best_model.zip" 
+        "PPO_Original_Gym": "final_models/ppo_original.zip", 
+        "PPO_Custom_Gym":   "final_models/ppo_custom.zip", 
+        "PPO_Zoo_Custom":   "final_models/ppo_zoo_custom.zip", 
+        "SAC_Custom":       "final_models/sac_custom.zip" 
     }
 
     N_EPISODES = 5
