@@ -1,4 +1,5 @@
 Antes de executar o projeto, devem ser instaladas as dependências através do ficheiro de requisitos usando `pip install -r requirements.txt`.
+Por ocupar demasiado espaço, tivemos de pôr o ficheiro sac_custom.zip fora do zip principal, esse ficheiro deve ser então posto na pasta final_models para poder rodar o ambiente.
 
 Para efetuar a comparação dos modelos, basta executar o ficheiro de comparação, não sendo necessário passar qualquer argumento. O script carrega automaticamente os quatro modelos definidos e apresenta os resultados finais. Para isso, basta correr `python comparison_models.py`.
 
